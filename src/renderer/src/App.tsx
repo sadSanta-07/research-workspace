@@ -25,6 +25,18 @@ function App(): React.ReactElement {
     fetchWorkspaces()
   }, [])
 
+  const handleSelectWorkspace = (workspaceId: string): void => {
+    if (isStreaming && activeChatId) {
+      window.api.cancelChat(activeChatId)
+    }
+
+    setActiveWorkspace(workspaceId)
+    setMessages([])
+    setInputValue('')
+    setActiveChatId(null)
+    setIsStreaming(false)
+  }
+
   const handleCreateWorkspace = async (e: FormEvent): Promise<void> => {
     e.preventDefault()
     if (!newWorkspaceName.trim()) return
@@ -32,7 +44,8 @@ function App(): React.ReactElement {
     const workspace = await window.api.createWorkspace(newWorkspaceName)
     setWorkspaces([...workspaces, workspace])
     setNewWorkspaceName('')
-    setActiveWorkspace(workspace.id)
+
+    handleSelectWorkspace(workspace.id)
   }
 
   const handleSendMessage = (e?: React.FormEvent): void => {
@@ -107,7 +120,7 @@ function App(): React.ReactElement {
                 workspaces.map((ws) => (
                   <button
                     key={ws.id}
-                    onClick={() => setActiveWorkspace(ws.id)}
+                    onClick={() => handleSelectWorkspace(ws.id)}
                     className={`text-left px-4 py-3 rounded-md text-[17px] transition-colors duration-[320ms] ${
                       activeWorkspace === ws.id
                         ? 'bg-primary text-background-alt'
