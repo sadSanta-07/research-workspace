@@ -25,7 +25,11 @@ const api = {
     ipcRenderer.removeAllListeners(`chat-error-${conversationId}`)
   },
   importDocument: (workspaceId: string) => ipcRenderer.invoke('import-document', workspaceId),
-  getDocuments: (workspaceId: string) => ipcRenderer.invoke('get-documents', workspaceId)
+  getDocuments: (workspaceId: string) => ipcRenderer.invoke('get-documents', workspaceId),
+
+  startBackgroundJob: (args: { workspaceId: string; documentId: string; type: string }) =>
+    ipcRenderer.invoke('start-background-job', args),
+  getBackgroundJobs: (workspaceId: string) => ipcRenderer.invoke('get-background-jobs', workspaceId)
 }
 if (process.contextIsolated) {
   try {
