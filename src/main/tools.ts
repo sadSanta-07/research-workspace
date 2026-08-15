@@ -22,7 +22,7 @@ const calculatorTool: AITool = {
   execute: async (args: { expression: string }) => {
     try {
       const sanitized = args.expression.replace(/[^0-9+\-*/(). ]/g, '')
-      const result = eval(sanitized)
+      const result = new Function(`return ${sanitized}`)()
       return `Result: ${result}`
     } catch (error) {
       return `Error evaluating expression: ${args.expression}`
