@@ -15,6 +15,8 @@ declare global {
       removeChatListeners: (conversationId: string) => void
       getMessages: (workspaceId: string) => Promise<any[]>
       saveMessage: (message: any) => Promise<any>
+      importDocument: (workspaceId: string) => Promise<any>
+      getDocuments: (workspaceId: string) => Promise<any[]>
     }
   }
 }
