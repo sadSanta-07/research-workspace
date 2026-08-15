@@ -21,6 +21,7 @@ function App(): React.ReactElement {
   const [inputValue, setInputValue] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
   const [activeChatId, setActiveChatId] = useState<string | null>(null)
+  const [documents, setDocuments] = useState<any[]>([])
 
   useEffect(() => {
     const fetchWorkspaces = async (): Promise<void> => {
@@ -37,10 +38,22 @@ function App(): React.ReactElement {
 
     setActiveWorkspace(workspaceId)
     setActiveChatId(workspaceId)
+    setInputValue('')
     setIsStreaming(false)
 
     const history = await window.api.getMessages(workspaceId)
     setMessages(history)
+
+    const docs = await window.api.getDocuments(workspaceId)
+    setDocuments(docs)
+  }
+
+  const handleImportDocument = async (): Promise<void> => {
+    if (!activeWorkspace) return
+    const newDoc = await window.api.importDocument(activeWorkspace)
+    if (newDoc) {
+      setDocuments((prev) => [...prev, newDoc])
+    }
   }
 
   const handleCreateWorkspace = async (e: FormEvent): Promise<void> => {
@@ -195,13 +208,19 @@ function App(): React.ReactElement {
                       className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
                     >
                       <span className="text-[12px] text-text-muted mb-[4px] px-[12px]">
-                        {msg.role === 'user' ? 'You' : 'Assistant'}
+                        {msg.role === 'user'
+                          ? 'You'
+                          : msg.role === 'system'
+                            ? 'System Alert'
+                            : 'Assistant'}
                       </span>
                       <div
                         className={`px-[20px] py-[12px] rounded-md max-w-[80%] text-[17px] leading-[1.4] ${
                           msg.role === 'user'
                             ? 'bg-primary text-background-alt'
-                            : 'bg-background text-text-primary'
+                            : msg.role === 'system'
+                              ? 'bg-red-500/10 text-red-600 border border-red-500/20 font-medium'
+                              : 'bg-background text-text-primary'
                         }`}
                       >
                         {msg.content}
@@ -215,6 +234,14 @@ function App(): React.ReactElement {
               </div>
               <div className="card p-[24px]">
                 <form onSubmit={handleSendMessage} className="flex gap-[16px]">
+                  <button
+                    type="button"
+                    onClick={handleImportDocument}
+                    className="button-secondary px-[16px] text-[14px]"
+                    title="Import Text or Markdown Document"
+                  >
+                    + Doc
+                  </button>
                   <input
                     type="text"
                     value={inputValue}
