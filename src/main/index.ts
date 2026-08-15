@@ -1,4 +1,4 @@
-import { getDb, recoverInterruptedTasks } from './db'
+import { getDb, recoverInterruptedTasks, addTask, completeTask } from './db'
 import { ContextManager } from './contextManager'
 import crypto from 'crypto'
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
@@ -55,7 +55,6 @@ app.whenReady().then(async () => {
   const aiProvider = new MockProvider()
   const contextManager = new ContextManager()
   const activeGenerations = new Map<string, AbortController>()
-  const mockDatabaseHistory: any[] = []
 
   ipcMain.handle('get-workspaces', async () => {
     const db = await getDb()
@@ -74,19 +73,34 @@ app.whenReady().then(async () => {
     return newWorkspace
   })
 
+  ipcMain.handle('get-messages', async (_, workspaceId: string) => {
+    const db = await getDb()
+    return db.data.messages.filter((m) => m.workspaceId === workspaceId)
+  })
+
+  ipcMain.handle('save-message', async (_, message: any) => {
+    const db = await getDb()
+    db.data.messages.push(message)
+    await db.write()
+    return message
+  })
+
   ipcMain.on('start-chat', async (event, { prompt, conversationId }) => {
     const controller = new AbortController()
     activeGenerations.set(conversationId, controller)
 
+    const taskId = await addTask(conversationId, prompt)
+
     try {
+      const db = await getDb()
+      const realHistory = db.data.messages
+        .filter((m) => m.workspaceId === conversationId)
+        .map((m) => ({ role: m.role, content: m.content }))
+
       const contextPackage = contextManager.assembleContext(
         prompt,
-        mockDatabaseHistory,
+        realHistory,
         'You are an expert AI research assistant. Provide concise, accurate answers.'
-      )
-
-      console.log(
-        `Context built: ${contextPackage.tokensUsed} tokens. Budget exceeded (truncated older messages)? ${contextPackage.budgetExceeded}`
       )
 
       const promptWithContext = JSON.stringify(contextPackage.messages)
@@ -100,9 +114,13 @@ app.whenReady().then(async () => {
       )
 
       event.reply(`chat-complete-${conversationId}`, finalResponse)
+
+      await completeTask(taskId, 'completed')
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       event.reply(`chat-error-${conversationId}`, errorMessage)
+
+      await completeTask(taskId, 'failed')
     } finally {
       activeGenerations.delete(conversationId)
     }
