@@ -19,22 +19,32 @@ export class MockProvider implements AIProvider {
     signal: AbortSignal,
     toolRegistry?: ToolRegistry
   ): Promise<string> {
-    let mockResponse = `This is a simulated response to: "${prompt}". `
+
+    let latestUserMessage = prompt
+    try {
+      const messages = JSON.parse(prompt)
+      if (Array.isArray(messages) && messages.length > 0) {
+        latestUserMessage = messages[messages.length - 1].content
+      }
+    } catch (e) {
+      // If it fails to parse, it just falls back to using the raw prompt
+    }
+    let mockResponse = `This is a simulated response to: "${latestUserMessage}". `
 
     if (toolRegistry) {
-      const lowerPrompt = prompt.toLowerCase()
+      const lowerPrompt = latestUserMessage.toLowerCase()
 
       if (lowerPrompt.includes('time') || lowerPrompt.includes('date')) {
         onChunk('[Running Tool: get_current_time...] \n\n')
         const timeResult = await toolRegistry.executeTool('get_current_time', {})
         mockResponse = `I checked the system clock. ${timeResult}`
-      } else if (
-        lowerPrompt.includes('+') ||
-        lowerPrompt.includes('add') ||
-        lowerPrompt.includes('calculate')
-      ) {
+      }
+
+      else if (lowerPrompt.includes('+') || lowerPrompt.includes('-') || lowerPrompt.includes('*') || lowerPrompt.includes('/')) {
         onChunk('[Running Tool: calculator...] \n\n')
-        const result = await toolRegistry.executeTool('calculator', { expression: '5 + 5' })
+        const mathMatch = latestUserMessage.match(/[0-9]+[ \t]*[+\-*/][ \t]*[0-9]+/)
+        const expressionToSolve = mathMatch ? mathMatch[0] : '0 + 0'
+        const result = await toolRegistry.executeTool('calculator', { expression: expressionToSolve })
         mockResponse = `I calculated that for you. ${result}`
       }
     }
