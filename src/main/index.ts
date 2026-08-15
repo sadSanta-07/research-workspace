@@ -6,6 +6,9 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { MockProvider } from './ai'
+import { dialog } from 'electron'
+import fs from 'fs/promises'
+import { ToolRegistry } from './tools'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -54,6 +57,7 @@ app.whenReady().then(async () => {
 
   const aiProvider = new MockProvider()
   const contextManager = new ContextManager()
+  const toolRegistry = new ToolRegistry()
   const activeGenerations = new Map<string, AbortController>()
 
   ipcMain.handle('get-workspaces', async () => {
@@ -85,6 +89,38 @@ app.whenReady().then(async () => {
     return message
   })
 
+  ipcMain.handle('import-document', async (event, workspaceId: string) => {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: [{ name: 'Text & Markdown', extensions: ['txt', 'md'] }]
+    })
+
+    if (canceled || filePaths.length === 0) return null
+
+    const filePath = filePaths[0]
+    const content = await fs.readFile(filePath, 'utf-8')
+
+    const name = filePath.replace(/^.*[\\/]/, '')
+
+    const db = await getDb()
+    const newDoc = {
+      id: crypto.randomUUID(),
+      workspaceId,
+      name,
+      content,
+      createdAt: new Date().toISOString()
+    }
+    db.data.documents.push(newDoc)
+    await db.write()
+
+    return newDoc
+  })
+
+  ipcMain.handle('get-documents', async (_, workspaceId: string) => {
+    const db = await getDb()
+    return db.data.documents.filter((d) => d.workspaceId === workspaceId)
+  })
+
   ipcMain.on('start-chat', async (event, { prompt, conversationId }) => {
     const controller = new AbortController()
     activeGenerations.set(conversationId, controller)
@@ -93,14 +129,23 @@ app.whenReady().then(async () => {
 
     try {
       const db = await getDb()
+
       const realHistory = db.data.messages
         .filter((m) => m.workspaceId === conversationId)
         .map((m) => ({ role: m.role, content: m.content }))
+      realHistory.pop()
+
+      const workspaceDocs = db.data.documents.filter((d) => d.workspaceId === conversationId)
+      const documentExcerpts =
+        workspaceDocs.length > 0
+          ? workspaceDocs.map((d) => `--- Document: ${d.name} ---\n${d.content}`).join('\n\n')
+          : undefined
 
       const contextPackage = contextManager.assembleContext(
         prompt,
         realHistory,
-        'You are an expert AI research assistant. Provide concise, accurate answers.'
+        'You are an expert AI research assistant. Provide concise, accurate answers.',
+        documentExcerpts // Pass the documents to your ContextManager!
       )
 
       const promptWithContext = JSON.stringify(contextPackage.messages)
@@ -110,7 +155,8 @@ app.whenReady().then(async () => {
         (chunk) => {
           event.reply(`chat-chunk-${conversationId}`, chunk)
         },
-        controller.signal
+        controller.signal,
+        toolRegistry
       )
 
       event.reply(`chat-complete-${conversationId}`, finalResponse)
