@@ -38,6 +38,14 @@ export interface DocumentRecord {
   status: 'processing' | 'ready' | 'failed'
   createdAt: string
 }
+export interface Task {
+  id: string
+  type: 'ai_generation'
+  workspaceId: string
+  prompt: string
+  status: 'pending' | 'completed' | 'failed'
+  createdAt: string
+}
 
 export interface TaskRecord {
   id: string
@@ -54,9 +62,16 @@ export interface TaskRecord {
 export interface DatabaseSchema {
   workspaces: Workspace[]
   conversations: Conversation[]
-  messages: Message[]
+  messages: ChatMessage[]
   documents: DocumentRecord[]
-  tasks: TaskRecord[]
+  tasks: Task[]
+}
+export interface ChatMessage {
+  id: string
+  workspaceId: string
+  role: 'system' | 'user' | 'assistant'
+  content: string
+  createdAt: string
 }
 
 const defaultData: DatabaseSchema = {
@@ -74,20 +89,49 @@ export async function getDb(): Promise<Low<DatabaseSchema>> {
   return db
 }
 
-export async function recoverInterruptedTasks(): Promise<void> {
+export async function addTask(workspaceId: string, prompt: string): Promise<string> {
   const db = await getDb()
-  let modified = false
+  const taskId = crypto.randomUUID()
+  db.data.tasks.push({
+    id: taskId,
+    type: 'ai_generation',
+    workspaceId,
+    prompt,
+    status: 'pending',
+    createdAt: new Date().toISOString()
+  })
+  await db.write()
+  return taskId
+}
 
-  for (const task of db.data.tasks) {
-    if (task.status === 'Running' || task.status === 'Queued') {
-      task.status = 'Failed'
-      task.error = 'Application closed unexpectedly before task completion.'
-      task.updatedAt = new Date().toISOString()
-      modified = true
-    }
-  }
-
-  if (modified) {
+export async function completeTask(taskId: string, status: 'completed' | 'failed'): Promise<void> {
+  const db = await getDb()
+  const task = db.data.tasks.find((t) => t.id === taskId)
+  if (task) {
+    task.status = status
     await db.write()
   }
+}
+
+export async function recoverInterruptedTasks(): Promise<void> {
+  const db = await getDb()
+  const pendingTasks = db.data.tasks.filter((t) => t.status === 'pending')
+
+  if (pendingTasks.length === 0) return
+
+  console.log(`Found ${pendingTasks.length} interrupted tasks. Recovering...`)
+
+  for (const task of pendingTasks) {
+    task.status = 'failed'
+
+    db.data.messages.push({
+      id: crypto.randomUUID(),
+      workspaceId: task.workspaceId,
+      role: 'system',
+      content:
+        'The previous generation was interrupted because the application closed. Please try again.',
+      createdAt: new Date().toISOString()
+    })
+  }
+  await db.write()
 }
