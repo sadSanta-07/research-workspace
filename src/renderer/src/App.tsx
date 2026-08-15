@@ -5,14 +5,19 @@ interface Workspace {
   name: string
   createdAt: string
 }
+interface ChatMessage {
+  id: string
+  workspaceId: string
+  role: 'system' | 'user' | 'assistant'
+  content: string
+  createdAt: string
+}
 
 function App(): React.ReactElement {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [newWorkspaceName, setNewWorkspaceName] = useState('')
   const [activeWorkspace, setActiveWorkspace] = useState<string | null>(null)
-  const [messages, setMessages] = useState<
-    { id: string; role: 'user' | 'assistant'; content: string }[]
-  >([])
+  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [inputValue, setInputValue] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
   const [activeChatId, setActiveChatId] = useState<string | null>(null)
@@ -25,16 +30,17 @@ function App(): React.ReactElement {
     fetchWorkspaces()
   }, [])
 
-  const handleSelectWorkspace = (workspaceId: string): void => {
+  const handleSelectWorkspace = async (workspaceId: string): Promise<void> => {
     if (isStreaming && activeChatId) {
       window.api.cancelChat(activeChatId)
     }
 
     setActiveWorkspace(workspaceId)
-    setMessages([])
-    setInputValue('')
-    setActiveChatId(null)
+    setActiveChatId(workspaceId)
     setIsStreaming(false)
+
+    const history = await window.api.getMessages(workspaceId)
+    setMessages(history)
   }
 
   const handleCreateWorkspace = async (e: FormEvent): Promise<void> => {
@@ -48,15 +54,29 @@ function App(): React.ReactElement {
     handleSelectWorkspace(workspace.id)
   }
 
-  const handleSendMessage = (e?: React.FormEvent): void => {
+  const handleSendMessage = async (e?: React.FormEvent): Promise<void> => {
     if (e) e.preventDefault()
-    if (!inputValue.trim() || isStreaming) return
+    if (!inputValue.trim() || isStreaming || !activeWorkspace) return
 
-    const chatId = activeChatId || crypto.randomUUID()
-    if (!activeChatId) setActiveChatId(chatId)
+    const chatId = activeWorkspace
 
-    const newUserMessage = { id: crypto.randomUUID(), role: 'user' as const, content: inputValue }
-    const newAssistantMessage = { id: crypto.randomUUID(), role: 'assistant' as const, content: '' }
+    const newUserMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      workspaceId: activeWorkspace,
+      role: 'user',
+      content: inputValue,
+      createdAt: new Date().toISOString()
+    }
+
+    const newAssistantMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      workspaceId: activeWorkspace,
+      role: 'assistant',
+      content: '',
+      createdAt: new Date().toISOString()
+    }
+
+    await window.api.saveMessage(newUserMessage)
 
     setMessages((prev) => [...prev, newUserMessage, newAssistantMessage])
     setInputValue('')
@@ -74,9 +94,12 @@ function App(): React.ReactElement {
       })
     })
 
-    window.api.onChatComplete(chatId, () => {
+    window.api.onChatComplete(chatId, async (fullText) => {
       setIsStreaming(false)
       window.api.removeChatListeners(chatId)
+
+      const finalAssistantMessage = { ...newAssistantMessage, content: fullText }
+      await window.api.saveMessage(finalAssistantMessage)
     })
 
     window.api.onChatError(chatId, (error) => {
