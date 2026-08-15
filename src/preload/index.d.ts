@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 import { ElectronAPI } from '@electron-toolkit/preload'
 import { Workspace } from '../main/db'
 
@@ -17,6 +18,8 @@ declare global {
       saveMessage: (message: any) => Promise<any>
       importDocument: (workspaceId: string) => Promise<any>
       getDocuments: (workspaceId: string) => Promise<any[]>
+      startBackgroundJob: (args: { workspaceId: string, documentId: string, type: string }) => Promise<any>
+      getBackgroundJobs: (workspaceId: string) => Promise<any[]>
     }
   }
 }
