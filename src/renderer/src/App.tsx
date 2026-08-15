@@ -22,6 +22,7 @@ function App(): React.ReactElement {
   const [isStreaming, setIsStreaming] = useState(false)
   const [activeChatId, setActiveChatId] = useState<string | null>(null)
   const [documents, setDocuments] = useState<any[]>([])
+  const [backgroundJobs, setBackgroundJobs] = useState<any[]>([])
 
   useEffect(() => {
     const fetchWorkspaces = async (): Promise<void> => {
@@ -46,7 +47,25 @@ function App(): React.ReactElement {
 
     const docs = await window.api.getDocuments(workspaceId)
     setDocuments(docs)
+
+    const jobs = await window.api.getBackgroundJobs(workspaceId)
+    setBackgroundJobs(jobs)
   }
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout
+    const hasRunningJobs = backgroundJobs.some(
+      (job) => job.status === 'Running' || job.status === 'Queued'
+    )
+
+    if (activeWorkspace && hasRunningJobs) {
+      interval = setInterval(async () => {
+        const updatedJobs = await window.api.getBackgroundJobs(activeWorkspace)
+        setBackgroundJobs(updatedJobs)
+      }, 2000)
+    }
+    return () => clearInterval(interval)
+  }, [activeWorkspace, backgroundJobs])
 
   const handleImportDocument = async (): Promise<void> => {
     if (!activeWorkspace) return
@@ -193,6 +212,90 @@ function App(): React.ReactElement {
         <section className="col-span-12 md:col-span-8 flex flex-col gap-[24px]">
           {activeWorkspace ? (
             <>
+              {(documents.length > 0 || backgroundJobs.length > 0) && (
+                <div className="card p-[24px]">
+                  {documents.length > 0 && (
+                    <div className="mb-[16px]">
+                      <h3 className="text-[14px] font-bold text-text-muted mb-[12px]">
+                        Workspace Documents
+                      </h3>
+                      <div className="flex flex-col gap-[8px]">
+                        {documents.map((doc) => (
+                          <div
+                            key={doc.id}
+                            className="flex items-center justify-between bg-background p-[12px] rounded-md border border-border"
+                          >
+                            <span className="text-[14px] font-medium">{doc.name}</span>
+                            <div className="flex gap-[8px]">
+                              <button
+                                onClick={async () => {
+                                  await window.api.startBackgroundJob({
+                                    workspaceId: activeWorkspace,
+                                    documentId: doc.id,
+                                    type: 'summarize'
+                                  })
+                                  const jobs = await window.api.getBackgroundJobs(activeWorkspace)
+                                  setBackgroundJobs(jobs)
+                                }}
+                                className="button-secondary text-[12px] px-[8px] py-[4px]"
+                              >
+                                Summarize
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  await window.api.startBackgroundJob({
+                                    workspaceId: activeWorkspace,
+                                    documentId: doc.id,
+                                    type: 'extract'
+                                  })
+                                  const jobs = await window.api.getBackgroundJobs(activeWorkspace)
+                                  setBackgroundJobs(jobs)
+                                }}
+                                className="button-secondary text-[12px] px-[8px] py-[4px]"
+                              >
+                                Extract Insights
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {backgroundJobs.length > 0 && (
+                    <div
+                      className={`${documents.length > 0 ? 'pt-[16px] border-t border-border' : ''}`}
+                    >
+                      <h3 className="text-[14px] font-bold text-text-muted mb-[12px]">
+                        Background Jobs
+                      </h3>
+                      {backgroundJobs.map((job) => (
+                        <div
+                          key={job.id}
+                          className="text-[13px] mb-[8px] p-[12px] bg-background rounded-md border border-border"
+                        >
+                          <div className="flex justify-between mb-[4px]">
+                            <strong className="font-semibold">
+                              {job.type === 'summarize' ? 'Summary' : 'Extraction'}
+                            </strong>
+                            <span
+                              className={`font-medium ${job.status === 'Running' ? 'text-blue-500 animate-pulse' : job.status === 'Completed' ? 'text-green-500' : 'text-text-muted'}`}
+                            >
+                              {job.status}
+                            </span>
+                          </div>
+                          {job.result && (
+                            <div className="text-text-muted mt-[8px] border-t border-border pt-[8px]">
+                              {job.result}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="card flex-1 flex flex-col gap-[24px] min-h-[500px] max-h-[600px] overflow-y-auto">
                 {messages.length === 0 ? (
                   <div className="flex-1 flex flex-col items-center justify-center text-center">
