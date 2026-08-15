@@ -145,7 +145,7 @@ app.whenReady().then(async () => {
         prompt,
         realHistory,
         'You are an expert AI research assistant. Provide concise, accurate answers.',
-        documentExcerpts // Pass the documents to your ContextManager!
+        documentExcerpts
       )
 
       const promptWithContext = JSON.stringify(contextPackage.messages)
