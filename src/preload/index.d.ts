@@ -13,6 +13,8 @@ declare global {
       onChatComplete: (conversationId: string, callback: (fullText: string) => void) => void
       onChatError: (conversationId: string, callback: (error: string) => void) => void
       removeChatListeners: (conversationId: string) => void
+      getMessages: (workspaceId: string) => Promise<any[]>
+      saveMessage: (message: any) => Promise<any>
     }
   }
 }
