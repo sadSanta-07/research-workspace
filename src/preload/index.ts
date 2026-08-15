@@ -23,7 +23,9 @@ const api = {
     ipcRenderer.removeAllListeners(`chat-chunk-${conversationId}`)
     ipcRenderer.removeAllListeners(`chat-complete-${conversationId}`)
     ipcRenderer.removeAllListeners(`chat-error-${conversationId}`)
-  }
+  },
+  importDocument: (workspaceId: string) => ipcRenderer.invoke('import-document', workspaceId),
+  getDocuments: (workspaceId: string) => ipcRenderer.invoke('get-documents', workspaceId)
 }
 if (process.contextIsolated) {
   try {
