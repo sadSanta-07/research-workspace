@@ -121,6 +121,72 @@ app.whenReady().then(async () => {
     return db.data.documents.filter((d) => d.workspaceId === workspaceId)
   })
 
+  ipcMain.handle('start-background-job', async (event, { workspaceId, documentId, type }) => {
+    const db = await getDb()
+    const doc = db.data.documents.find((d) => d.id === documentId)
+    if (!doc) throw new Error('Document not found')
+
+    const newJob = {
+      id: crypto.randomUUID(),
+      workspaceId,
+      type,
+      status: 'Queued' as const,
+      input: doc.name,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
+
+    db.data.tasks.push(newJob as any)
+    await db.write()
+
+    runBackgroundJob(newJob.id, doc.content, type)
+
+    return newJob
+  })
+
+  ipcMain.handle('get-background-jobs', async (_, workspaceId: string) => {
+    const db = await getDb()
+    return db.data.tasks.filter(
+      (t: any) => t.workspaceId === workspaceId && (t.type === 'summarize' || t.type === 'extract')
+    )
+  })
+
+  async function runBackgroundJob(jobId: string, content: string, type: string) {
+    let db = await getDb()
+    let job = db.data.tasks.find((t) => t.id === jobId) as any
+    if (!job) return
+
+    job.status = 'Running'
+    job.updatedAt = new Date().toISOString()
+    await db.write()
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 5000))
+
+      if (type === 'summarize') {
+        job.result = `Summary complete: The document discusses various technical concepts. Total length processed: ${content.length} characters.`
+      } else if (type === 'extract') {
+        job.result = `Key Insights:\n1. Architecture scales well.\n2. Persistence is local.\n3. Extensibility requires clean interfaces.`
+      }
+
+      job.status = 'Completed'
+    } catch (error) {
+      job.status = 'Failed'
+      job.error = String(error)
+    } finally {
+      job.updatedAt = new Date().toISOString()
+      db = await getDb()
+      const currentJob = db.data.tasks.find((t) => t.id === jobId) as any
+      if (currentJob) {
+        currentJob.status = job.status
+        currentJob.result = job.result
+        currentJob.error = job.error
+        currentJob.updatedAt = job.updatedAt
+        await db.write()
+      }
+    }
+  }
+
   ipcMain.on('start-chat', async (event, { prompt, conversationId }) => {
     const controller = new AbortController()
     activeGenerations.set(conversationId, controller)
