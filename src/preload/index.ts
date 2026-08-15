@@ -4,6 +4,8 @@ import { electronAPI } from '@electron-toolkit/preload'
 const api = {
   getWorkspaces: () => ipcRenderer.invoke('get-workspaces'),
   createWorkspace: (name: string) => ipcRenderer.invoke('create-workspace', name),
+  getMessages: (workspaceId: string) => ipcRenderer.invoke('get-messages', workspaceId),
+  saveMessage: (message: any) => ipcRenderer.invoke('save-message', message),
 
   startChat: (prompt: string, conversationId: string) =>
     ipcRenderer.send('start-chat', { prompt, conversationId }),
