@@ -67,4 +67,11 @@ Mock AI Provider: To ensure a frictionless review process without API key manage
 
 **Database Choice:** lowdb was chosen for speed of development and ease of local file inspection; in production, this would be migrated to SQLite for better concurrent read/write locks.
 
+## Use of AI Disclosure
+
+In accordance with the assignment guidelines, I utilized an AI coding assistant (Gemini) during the development of this project.
+
+* **What the AI helped with:** Generating boilerplate React/Electron configurations, writing regex for tool argument sanitization, assisting with the CSS/Tailwind layout, and troubleshooting Vite/Electron cache errors (`EACCES 0x5`).
+* **What I independently reviewed/changed:** I architected the overall system design, decided on the `lowdb` persistence strategy, designed the `ContextManager` token-budgeting logic, implemented the IPC bridge boundaries, and wrote the Vitest test assertions to verify system security. I fully understand and can trace all generated code.
+
 Approximate Time Spent: ~20 hours.
